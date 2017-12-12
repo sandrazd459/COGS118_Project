@@ -13,7 +13,8 @@ Referecence:
 -- http://blog.csdn.net/baixiaozhe/article/details/54409966
 
 """
-
+import copy
+import time
 import numpy as np  
 import tensorflow as tf 
 import matplotlib.pyplot as plt  
@@ -21,7 +22,6 @@ import matplotlib.pyplot as plt
 from sklearn import preprocessing  
 from sklearn.datasets import load_boston  
 from sklearn.model_selection import train_test_split  
-#http://blog.csdn.net/baixiaozhe/article/details/54409966
 
 boston=load_boston()  
 x=boston.data  
@@ -32,10 +32,12 @@ x=np.column_stack([x,x_3])
 print('############################### CNN for boston ###############################')  
   
 #random
-image, image_, price, price_ = train_test_split(x, y,  train_size=0.8, random_state=33)  
+image, image_, price, price_ = train_test_split(x, y,  train_size=0.9, random_state=33)  
 
-price = np.reshape(price, (404,1))
-price_ = np.reshape(price_, (102,1))
+#image = image[:304]
+#price = price[:304]
+price = np.reshape(price, (len(price),1))
+price_ = np.reshape(price_, (len(price_),1))
 
 """ Initialize weights and bias """
 #weight
@@ -64,6 +66,7 @@ def max_pool_2x2(x):
 xs = tf.placeholder(tf.float32, [None, 16])
 ys = tf.placeholder(tf.float32, [None, 1])
 keep_prob = tf.placeholder(tf.float32) 
+global_step = tf.Variable(0, trainable=False)
 
 """ 
 Concurrent Neural Networdk 
@@ -108,10 +111,19 @@ def CNN_network():
 #end of CNN_network
 
 
+
 def train_network():
     prediction = CNN_network() #building network
     loss_func = tf.reduce_mean(tf.reduce_sum(tf.square(ys - prediction), reduction_indices=[1]))  #dist
-    train_step = tf.train.AdamOptimizer(0.01).minimize(loss_func)  
+    
+    
+    #learning_rate = 0.01
+    initial_learning_rate = 0.01
+    learning_rate = tf.train.exponential_decay(initial_learning_rate,global_step=global_step,decay_steps=10,decay_rate=0.1)
+    
+    train_step = tf.train.AdamOptimizer(learning_rate).minimize(loss_func)  
+    #train_step = tf.train.GradientDescentOptimizer(0.001).minimize(loss_func) 
+       
       
     #sess = tf.Session()  
     #tf.initialize_all_variables() no long valid from  
@@ -124,7 +136,7 @@ def train_network():
     print("Start training")
     with tf.Session() as sess:  
         sess.run(tf.global_variables_initializer()) 
-        for i in range(500):  
+        for i in range(1000):  
             sess.run(train_step, feed_dict={xs: image, ys: price, keep_prob: 0.5})   #train
             
             train_loss = sess.run(loss_func, feed_dict={xs: image, ys: price, keep_prob: 1.0})
@@ -132,7 +144,7 @@ def train_network():
             train_stat.append(train_loss)
             test_stat.append(test_loss)
             
-            print("step %d, trainins loss is: %g, testing loss is : %g " %(i, train_loss, test_loss))
+            print("step %d, trainins loss is: %g, testing loss is : %g " %(i+1, train_loss, test_loss))
             
         #Final prediction 
         prediction_value = sess.run(prediction, feed_dict={xs: image_, ys: price_, keep_prob: 1.0})  
@@ -141,7 +153,10 @@ def train_network():
     
 
 """ Call function to fit data """   
+start_time = time.time()
 predict, train_stat, test_stat = train_network()
+elapsed_time = time.time() - start_time
+print(elapsed_time)
 
 """ plot price fitting result """
 fig= plt.figure(figsize=(20,5))
@@ -159,11 +174,28 @@ plt.title('Price Fitting for Test Group')
 plt.show()
 
 """ plot loss for each iteration """
-fig= plt.figure(figsize=(10,10)) 
+fig= plt.figure(figsize=(8,8)) 
 plt.figure(1)
-plt.plot(np.log(train_stat[:500]), label = "train_loss") 
-plt.plot(np.log(test_stat[:500]), label = "test_loss")
+plt.plot(np.log(train_stat), label = "train_loss") 
+plt.plot(np.log(test_stat), label = "test_loss")
 plt.legend(loc="best")
 plt.title('log of CNN loss through  iterations') 
-
 plt.show()  
+
+#step 500, trainins loss is: 11.5388, testing loss is : 28.4096 (keep_prob = 1.0)
+#step 500, trainins loss is: 9.34652, testing loss is : 21.5558 (keep_prob = 0.75)
+#step 500, trainins loss is: 16.806, testing loss is : 22.1724  (keep_prob = 0.5)
+#step 500, trainins loss is: 12.0139, testing loss is : 27.9401 (keep_prob = 0.25)
+
+
+"""
+P23 = copy.deepcopy(train_stat)
+Q23 = copy.deepcopy(test_stat)
+
+import pickle
+with open('CNN30.pkl','w') as f:
+    pickle.dump([P11,Q11,P12,Q12,P13,Q13,P14,Q14,P15,Q15] , f)
+    
+with open('CNN30.pkl') as f:
+    P11,Q11,P12,Q12,P13,Q13,P14,Q14,P15,Q15 = pickle.load(f)
+"""
